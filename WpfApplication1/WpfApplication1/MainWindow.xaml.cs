@@ -17,21 +17,53 @@ using System.Windows.Shapes;
 
 namespace WpfApplication1
 {
+    class CustomData
+    {
+        public long CreationTime;
+        public int Name;
+        public int ThreadNum;
+    }
     /// <summary>
     /// MainWindow.xaml 的交互逻辑
     /// </summary>
     public partial class MainWindow : Window
     {
         CancellationTokenSource cts;
+        public int i = 0;
         public MainWindow()
         {
             strList = SetUpURLList();
             InitializeComponent();
         }
 
+        private void foo()
+        {
+            while (i<10)
+            {
+                Console.WriteLine($"i={i}");
+                Thread.Sleep(TimeSpan.FromSeconds(4));
+            }
+        }
+
 
         private async void button_Click(object sender, RoutedEventArgs e)
         {
+/*            Task[] taskArray = new Task[10];
+            for (int i = 0; i < taskArray.Length; i++)
+            {
+                taskArray[i] = Task.Factory.StartNew((Object obj) =>
+                {
+                    CustomData data = obj as CustomData;
+                    if (data == null)return;
+                    data.ThreadNum = Thread.CurrentThread.ManagedThreadId;
+                    Console.WriteLine("Task #{0} created at {1} on thread #{2}.",data.Name, data.CreationTime, data.ThreadNum);
+                },new CustomData() {Name = i, CreationTime = DateTime.Now.Ticks});
+            }
+            Task.WaitAll(taskArray);
+            */
+
+            await Task.Run(()=>foo());
+
             resultsTextBox.Clear();
 
             // Instantiate the CancellationTokenSource.
@@ -66,16 +98,12 @@ namespace WpfApplication1
 
         async Task AccessTheWebAsync(CancellationToken ct)
         {
-            HttpClient client = new HttpClient();
 
             // Make a list of web addresses.
             List<string> urlList = SetUpURLList();
 
-            // ***Create a query that, when executed, returns a collection of tasks.
-            IEnumerable<Task<int>> downloadTasksQuery =
-                from url in urlList select ProcessURL(url, client, ct);
 
-            var tasks = Enumerable.Range(1, 5).Select(i => MakeTask(i,ct)).ToList();
+/*            var tasks = Enumerable.Range(1, 5).Select(i => MakeTask(i,ct)).ToList();
             while (tasks.Count > 0)
             {
                 // Identify the first task that completes.
@@ -90,33 +118,38 @@ namespace WpfApplication1
                 
                 resultsTextBox.Text += $"\r\n  { firstFinishedTask.Result}";
             }
+            */
 
 
-/*            // ***Use ToList to execute the query and start the tasks. 
-            List<Task<int>> downloadTasks = downloadTasksQuery.ToList();
+            // ***Use ToList to execute the query and start the tasks. 
+            // ***Create a query that, when executed, returns a collection of tasks.
+            HttpClient client = new HttpClient();
+            var downloadTasksQuery =from url in urlList select ProcessURL(url, client, ct);
+            var downloadTasks = downloadTasksQuery.ToList();
 
             // ***Add a loop to process the tasks one at a time until none remain.
             while (downloadTasks.Count > 0)
             {
                 // Identify the first task that completes.
-                Task<int> firstFinishedTask = await Task.WhenAny(downloadTasks);
+                var firstFinishedTask = await Task.WhenAny(downloadTasks);
 
                 // ***Remove the selected task from the list so that you don't
                 // process it more than once.
                 downloadTasks.Remove(firstFinishedTask);
 
                 // Await the completed task.
-                int length = await firstFinishedTask;
-                resultsTextBox.Text += String.Format("\r\nLength of the download:  {0}", length);
+                //int length = await firstFinishedTask;
+                resultsTextBox.Text += $"\r\nLength of the download:  {firstFinishedTask.Result}";
             }
-            */
+            
         }
 
         private async Task<string> MakeTask(int i,CancellationToken ct)
         {
+            var managedThreadId = Thread.CurrentThread.ManagedThreadId;
             await Task.Delay(TimeSpan.FromSeconds(i), ct);
 
-            return i+" : "+ strList[i];
+            return i+" : "+ managedThreadId+":"+ strList[i];
         }
 
         private IList<string> strList;
@@ -137,17 +170,18 @@ namespace WpfApplication1
         }
 
 
-        async Task<int> ProcessURL(string url, HttpClient client, CancellationToken ct)
+        async Task<string> ProcessURL(string url, HttpClient client, CancellationToken ct)
         {
             // GetAsync returns a Task<HttpResponseMessage>. 
             HttpResponseMessage response = await client.GetAsync(url, ct);
 
             // Retrieve the website contents from the HttpResponseMessage.
             byte[] urlContents = await response.Content.ReadAsByteArrayAsync();
+            var managedThreadId = Thread.CurrentThread.ManagedThreadId;
 
-            await Task.Delay(TimeSpan.FromSeconds(1), ct);
+            //await Task.Delay(TimeSpan.FromSeconds(1), ct);
 
-            return urlContents.Length;
+            return $"Id={managedThreadId}, Len={urlContents.Length}";
         }
     }
 }
